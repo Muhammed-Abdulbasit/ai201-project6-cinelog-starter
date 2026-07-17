@@ -106,20 +106,31 @@ def test_add_to_watchlist_nonexistent_film_raises(app, sample_user):
 
 # ── get_watchlist sort order ─────────────────────────────────────────────────
 
-def test_get_watchlist_returns_films_sorted_by_title(app, sample_user):
+def test_get_watchlist_returns_newest_first(app, sample_user):
     """
-    get_watchlist() should return films sorted alphabetically by title.
+    get_watchlist() should return films sorted by date_added descending
+    (most recently added first), matching get_collection()'s ordering.
     """
     with app.app_context():
+        from datetime import datetime, timezone, timedelta
+        from models import Film, WatchlistEntry
+
         film_a = Film(title="Zodiac", year=2007, genre="Thriller")
         film_b = Film(title="Amelie", year=2001, genre="Romance")
         db.session.add_all([film_a, film_b])
         db.session.commit()
 
-        add_to_watchlist(user_id=sample_user, film_id=film_a.id)
-        add_to_watchlist(user_id=sample_user, film_id=film_b.id)
+        earlier = datetime.now(timezone.utc) - timedelta(days=5)
+        later = datetime.now(timezone.utc)
+
+        entry_a = WatchlistEntry(user_id=sample_user, film_id=film_a.id, date_added=earlier)
+        entry_b = WatchlistEntry(user_id=sample_user, film_id=film_b.id, date_added=later)
+        db.session.add_all([entry_a, entry_b])
+        db.session.commit()
 
         watchlist = get_watchlist(sample_user)
         titles = [f["title"] for f in watchlist]
 
-        assert titles == ["Amelie", "Zodiac"]
+        # Amelie was added later, so it should come first
+        assert titles[0] == "Amelie"
+        assert titles[1] == "Zodiac"
